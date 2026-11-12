@@ -673,7 +673,7 @@ double ninja::getSmallestRadiusOfInfluence()
  * @param tol Convergence tolerance to stop at.
  * @return Returns true if solver converges and completes properly.
  */
-bool ninja::solve(double *A, double *b, double *x, int *row_ptr, int *col_ind, int NUMNP, int max_iter, int print_iters, double tol)
+bool ninja::solve(double *A, double *b, double *x, wn_idx *row_ptr, wn_idx *col_ind, int NUMNP, int max_iter, int print_iters, double tol)
 {
     //stuff for sparse BLAS MV multiplication
     char transa='n';
@@ -863,7 +863,7 @@ bool ninja::solve(double *A, double *b, double *x, int *row_ptr, int *col_ind, i
 //  MINRES from PetSc (found in google code search)
 //    This solver seems to be monotonic in its convergence (residual always goes down)
 //    Could use this if CG diverges, but haven't seen divergence yet...
-bool ninja::solveMinres(double *A, double *b, double *x, int *row_ptr, int *col_ind, int NUMNP, int max_iter, int print_iters, double tol)
+bool ninja::solveMinres(double *A, double *b, double *x, wn_idx *row_ptr, wn_idx *col_ind, int NUMNP, int max_iter, int print_iters, double tol)
 {
 
   int i,j, n;
@@ -1223,7 +1223,7 @@ double ninja::cblas_dnrm2(const int N, const double *X, const int incX)
  * @param beta Not used here, but included to stay with the BLAS.
  * @param y Vector of size m (and k) in the A*x=y computation.
  */
-void ninja::mkl_dcsrmv(char *transa, int *m, int *k, double *alpha, char *matdescra, double *val, int *indx, int *pntrb, int *pntre, double *x, double *beta, double *y)
+void ninja::mkl_dcsrmv(char *transa, int *m, int *k, double *alpha, char *matdescra, double *val, wn_idx *indx, wn_idx *pntrb, wn_idx *pntre, double *x, double *beta, double *y)
 {	// My version of MKL's compressed sparse row (CSR) matrix vector product function
 	// MINE ONLY WORKS FOR A SYMMETRICALLY STORED, UPPER TRIANGULAR MATRIX!!!!!!
 	// AND ALPHA==1 AND BETA==0
@@ -1234,7 +1234,8 @@ void ninja::mkl_dcsrmv(char *transa, int *m, int *k, double *alpha, char *matdes
 		//"indx" is an array describing the column index of "A" (sometimes called "col_ind")
 		//"pntrb" is a pointer containing indices of "A" of the starting locations of the rows
 		//"pntre" is a pointer containg indices of "A" of the ending locations of the rows
-		int i,j,N;
+		int i,N;
+		wn_idx j;
 		N=*m;
 
     #pragma omp parallel private(i,j)
@@ -1289,7 +1290,7 @@ void ninja::mkl_dcsrmv(char *transa, int *m, int *k, double *alpha, char *matdes
  * @param beta Not used here, but included to stay with the BLAS.
  * @param y Vector of size m (and k) in the A*x=y computation.
  */
-void ninja::mkl_trans_dcsrmv(char *transa, int *m, int *k, double *alpha, char *matdescra, double *val, int *indx, int *pntrb, int *pntre, double *x, double *beta, double *y)
+void ninja::mkl_trans_dcsrmv(char *transa, int *m, int *k, double *alpha, char *matdescra, double *val, wn_idx *indx, wn_idx *pntrb, wn_idx *pntre, double *x, double *beta, double *y)
 {
 		//function multiplies the traspose of a sparse matrix "val" times a vector "x", result is stored in "y"
 		//		ie. A^Tx = y
@@ -1297,7 +1298,8 @@ void ninja::mkl_trans_dcsrmv(char *transa, int *m, int *k, double *alpha, char *
 		//"indx" is an array describing the column index of "A" (sometimes called "col_ind")
 		//"pntrb" is a pointer containing indices of "A" of the starting locations of the rows
 		//"pntre" is a pointer containg indices of "A" of the ending locations of the rows
-		int i,j,N;
+		int i,N;
+		wn_idx j;
 		N=*m;
 		double *temp;
 
@@ -1440,7 +1442,7 @@ void ninja::write_compare_output()
  * @param row_ptr Row pointer vector for compressed row stored matrix A.
  * @param b "b" vector in A*x=b computation.  Size is NUMNP.
  */
-void ninja::write_A_and_b(int NUMNP, double *A, int *col_ind, int *row_ptr, double *b)
+void ninja::write_A_and_b(int NUMNP, double *A, wn_idx *col_ind, wn_idx *row_ptr, double *b)
 {
     FILE *A_file;
     FILE *b_file;
@@ -1448,12 +1450,13 @@ void ninja::write_A_and_b(int NUMNP, double *A, int *col_ind, int *row_ptr, doub
     A_file = fopen("A.txt", "w");
 	b_file = fopen("b.txt", "w");
 
-	int i,j;
+	int i;
+	wn_idx j;
 
 	for(i=0;i<NUMNP;i++)
 	{
 		for(j=row_ptr[i];j<row_ptr[i+1];j++)
-			fprintf(A_file,"%d = %lf , %d\n", j, A[j], col_ind[j]);
+			fprintf(A_file,"%lld = %lf , %lld\n", (long long)j, A[j], (long long)col_ind[j]);
 		fprintf(b_file,"%d = %lf\n", i, b[i]);
 	}
 
@@ -1533,19 +1536,25 @@ void ninja::discretize()
      int interlayers=mesh.nlayers-2;
 	 int i, ii, j, jj, k, kk, l;
                          //NZND is the # of nonzero elements in the SK stiffness array that are stored
-     int NZND=(8*8)+(intercols*4+interrows*4+interlayers*4)*12+(intercols*interlayers*2+interrows*interlayers*2+intercols*interrows*2)*18+(intercols*interrows*interlayers)*27;
+     // For a fine/large domain NZND exceeds 2^31, so it (and every index into SK/col_ind
+     // below) must be 64-bit (wn_idx). The sub-expressions are cast to wn_idx BEFORE
+     // multiplying so the products themselves cannot overflow a 32-bit int.
+     wn_idx NZND=(wn_idx)(8*8)
+         +((wn_idx)intercols*4+(wn_idx)interrows*4+(wn_idx)interlayers*4)*12
+         +((wn_idx)intercols*interlayers*2+(wn_idx)interrows*interlayers*2+(wn_idx)intercols*interrows*2)*18
+         +((wn_idx)intercols*interrows*interlayers)*27;
 
      NZND = (NZND - mesh.NUMNP)/2 + mesh.NUMNP;	//this is because we will only store the upper half of the SK matrix since it's symmetric
 
 	 SK = new double[NZND];	//This is the final global stiffness matrix in Compressed Row Storage (CRS) and symmetric 
 	 //SK = new taucs_double[NZND];
 
-	 col_ind=new int[NZND];      //This holds the global column number of the corresponding element in the CRS storage
-	 row_ptr=new int[mesh.NUMNP+1];     //This holds the element number in the SK array (CRS) of the first non-zero entry for the global row (the "+1" is so we can use the last entry to quit loops; ie. so we know how many non-zero elements are in the last node)
+	 col_ind=new wn_idx[NZND];      //This holds the global column number of the corresponding element in the CRS storage
+	 row_ptr=new wn_idx[mesh.NUMNP+1];     //This holds the element number in the SK array (CRS) of the first non-zero entry for the global row (the "+1" is so we can use the last entry to quit loops; ie. so we know how many non-zero elements are in the last node)
 	 RHS=new double[mesh.NUMNP];       //This is the final right hand side (RHS) matrix
 
      int type;                     //This is the type of node (corner, edge, side, internal)
-     int temp,temp1;
+     wn_idx temp,temp1;            //running offsets into the CSR arrays (range up to NZND)
 
      #pragma omp parallel for default(shared) private(i)
 	 for(i=0;i<mesh.NUMNP;i++)
@@ -1555,11 +1564,11 @@ void ninja::discretize()
           row_ptr[i]=0;
      }
 
-	 #pragma omp parallel for default(shared) private(i)
-     for(i=0;i<NZND;i++)
+	 #pragma omp parallel for default(shared)
+     for(wn_idx nz=0;nz<NZND;nz++)
      {
-          col_ind[i]=0;
-          SK[i]=0.;
+          col_ind[nz]=0;
+          SK[nz]=0.;
      }
 
 	 int row, col;
@@ -1817,7 +1826,7 @@ void ninja::discretize()
 #pragma omp parallel default(shared) private(i,j,k,l)
 	 {
 		 element elem(&mesh);
-		 int pos;  
+		 wn_idx pos;   // position in SK[]/col_ind[] (range up to NZND)
          double alphaV; //used for summing over nodal points below
 
 #pragma omp for
@@ -1961,7 +1970,8 @@ void ninja::setBoundaryConditions()
      //This is done by moving the term with the known value to the RHS.
 
 	 int NPK, KNP;
-	 int i, j, k, l;
+	 int i, j, k;
+	 wn_idx l;   // walks CSR non-zero offsets row_ptr[NPK]..row_ptr[NPK+1] (range up to NZND)
 
 
 	  bool *isBoundaryNode;

@@ -79,7 +79,7 @@ Preconditioner::~Preconditioner()
 	//	delete U_col_ind;
 }
 
-bool Preconditioner::initialize(int numnp, double *A, int *row_ptr, int *col_ind, int preconditionerType, char *matdescra)
+bool Preconditioner::initialize(int numnp, double *A, wn_idx *row_ptr, wn_idx *col_ind, int preconditionerType, char *matdescra)
 {	
 	
 	if(preconditionerType == none)
@@ -118,9 +118,10 @@ bool Preconditioner::initialize(int numnp, double *A, int *row_ptr, int *col_ind
 		preConditionerType = preconditionerType;
 		NUMNP = numnp;
 
-		int i, j;
+		int i;
+		wn_idx j;
 
-		int count=0;
+		wn_idx count=0;
 		for(i=0; i<NUMNP; i++)	//count size of matrix A
 		{
 			for(j=row_ptr[i]; j<row_ptr[i+1]; j++)
@@ -133,9 +134,9 @@ bool Preconditioner::initialize(int numnp, double *A, int *row_ptr, int *col_ind
 		U = new double[count];
 
 		scratch = new double[NUMNP];
-		L_row_ptr = new int[NUMNP+1]; //+1 since we need to store the location of the end of Lt also (in mkl_dcsrsv() need pntre)
+		L_row_ptr = new wn_idx[NUMNP+1]; //+1 since we need to store the location of the end of Lt also (in mkl_dcsrsv() need pntre)
 		//U_row_ptr = new int[NUMNP];
-		L_col_ind = new int[count-NUMNP];
+		L_col_ind = new wn_idx[count-NUMNP];
 		//U_col_ind = new int[count];
 
 		count=0;
@@ -181,7 +182,7 @@ bool Preconditioner::initialize(int numnp, double *A, int *row_ptr, int *col_ind
 	return true;
 }
 
-bool Preconditioner::solve(double *r, double *z, int *row_ptr, int *col_ind)
+bool Preconditioner::solve(double *r, double *z, wn_idx *row_ptr, wn_idx *col_ind)
 {	//solves M*z=r;  ie z=M^(-1)*r
 
 	if(preConditionerType == none)
@@ -212,7 +213,7 @@ bool Preconditioner::solve(double *r, double *z, int *row_ptr, int *col_ind)
 	return false;
 }
 
-void Preconditioner::mkl_dcsrsv(char *transa, int *m, double *alpha, char *matdescra, double *val, int *indx, int *pntrb, int *pntre, double *x, double *y)
+void Preconditioner::mkl_dcsrsv(char *transa, int *m, double *alpha, char *matdescra, double *val, wn_idx *indx, wn_idx *pntrb, wn_idx *pntre, double *x, double *y)
 {	// My version of the mkl_dcsrsv() function; solves val*y=x
 	// Only works for my specific settings
 	//		Case 1:
@@ -227,7 +228,8 @@ void Preconditioner::mkl_dcsrsv(char *transa, int *m, double *alpha, char *matde
 	//			matdescra[1]='u';	//upper triangle
 	//			matdescra[2]='n';	//not unit diagonal
 	//			matdescra[3]='c';	//zero based indexing
-	int i, j;
+	int i;
+	wn_idx j;
 
 	//Case 1:
 	if(*transa=='t' && matdescra[0]=='t' && matdescra[1]=='u' && matdescra[2]=='u' && matdescra[3]=='c')

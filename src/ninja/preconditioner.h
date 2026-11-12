@@ -30,6 +30,15 @@
 #ifndef PRECONDITIONER_H
 #define PRECONDITIONER_H
 
+// 64-bit index/count type for the sparse CSR stiffness matrix.
+// Previously a 32-bit int, which overflowed on domains with more than ~2.1e9
+// matrix non-zeros (e.g. the ~100 m full-Swiss domain) and caused a silent
+// crash during "Building equations". See ninja::discretize().
+#ifndef WN_IDX_T_DEFINED
+#define WN_IDX_T_DEFINED
+typedef long long wn_idx;
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
    //#include <conio.h>
@@ -58,8 +67,8 @@ public:
 		SSOR
 	};
     
-    bool initialize(int numnp, double *A, int *row_ptr, int *col_ind, int preconditionerType, char *matdescra);
-	bool solve(double *r, double *z, int *row_ptr, int *col_ind);
+    bool initialize(int numnp, double *A, wn_idx *row_ptr, wn_idx *col_ind, int preconditionerType, char *matdescra);
+	bool solve(double *r, double *z, wn_idx *row_ptr, wn_idx *col_ind);
 
 private:
 	
@@ -68,7 +77,7 @@ private:
 	double *D;	//This is the inverse of the diagonal for Jacobi preconditioning, ie M^(-1)
 	double *Lt, *U;	//These are the upper and lower triangular matrices for the SSOR preconditioner
 	double *scratch;	//This is a vector used for intermediate computations in the SSOR preconditioner
-	int *L_row_ptr, *L_col_ind;
+	wn_idx *L_row_ptr, *L_col_ind;
 	//int *U_row_ptr, *U_col_ind;
 	double w;	//omega used in the SSOR preconditioner
 	
@@ -79,7 +88,7 @@ private:
 	char U_transa;	//solve using regular matrix (not transpose) y := alpha*inv(A)*x
 	char U_matdescra[6];
 
-	void mkl_dcsrsv(char *transa, int *m, double *alpha, char *matdescra, double *val, int *indx, int *pntrb, int *pntre, double *x, double *y);
+	void mkl_dcsrsv(char *transa, int *m, double *alpha, char *matdescra, double *val, wn_idx *indx, wn_idx *pntrb, wn_idx *pntre, double *x, double *y);
 	void cblas_dcopy(const int N, const double *X, const int incX, double *Y, const int incY);
 };
 

@@ -392,7 +392,7 @@ private:
 
     double *DIAG;
     double *PHI, *RHS, *SK;
-    int *row_ptr, *col_ind;
+    wn_idx *row_ptr, *col_ind;   // 64-bit CSR index/offset arrays (was int; overflowed >2.1e9 non-zeros)
     double alphaH; //alpha horizontal from governing equation, weighting for change in horizontal winds
     double alpha;                //alpha = alphaH/alphaV, determined by stability
     AsciiGrid<double> *uDiurnal, *vDiurnal, *wDiurnal, *height;
@@ -425,13 +425,13 @@ private:
 
     double getSmallestRadiusOfInfluence();
     void get_rootname(const char *NAME,char *shortname);
-    bool solve(double *SK, double *RHS, double *PHI, int *row_ptr,
-               int *col_ind, int NUMNP, int MAXITS, int print_iters, double stop_tol);
+    bool solve(double *SK, double *RHS, double *PHI, wn_idx *row_ptr,
+               wn_idx *col_ind, int NUMNP, int MAXITS, int print_iters, double stop_tol);
 
     /*-----------------------------------------------------------------------------
      * alternative solvers                                                           
      *-----------------------------------------------------------------------------*/
-    bool solveMinres(double *A, double *b, double *x, int *row_ptr, int *col_ind, int NUMNP, int max_iter, int print_iters, double tol);
+    bool solveMinres(double *A, double *b, double *x, wn_idx *row_ptr, wn_idx *col_ind, int NUMNP, int max_iter, int print_iters, double tol);
 
     /*-----------------------------------------------------------------------------
      *  MKL Specific Functions
@@ -448,18 +448,18 @@ private:
     double cblas_dnrm2(const int N, const double *X, const int incX);
 
     void mkl_dcsrmv(char *transa, int *m, int *k, double *alpha, char *matdescra,
-                    double *val, int *indx, int *pntrb, int *pntre, double *x,
+                    double *val, wn_idx *indx, wn_idx *pntrb, wn_idx *pntre, double *x,
                     double *beta, double *y);
 
     void cblas_dscal(const int N, const double alpha, double *X, const int incX);
-    void mkl_trans_dcsrmv(char *transa, int *m, int *k, double *alpha, char *matdescra, double *val, int *indx, int *pntrb, int *pntre, double *x, double *beta, double *y);
+    void mkl_trans_dcsrmv(char *transa, int *m, int *k, double *alpha, char *matdescra, double *val, wn_idx *indx, wn_idx *pntrb, wn_idx *pntre, double *x, double *beta, double *y);
 
     /*-----------------------------------------------------------------------------
      *  End MKL Section
      *-----------------------------------------------------------------------------*/
     void interp_uvw();
 
-    void write_A_and_b(int NUMNP, double *A, int *col_ind, int *row_ptr, double *b);
+    void write_A_and_b(int NUMNP, double *A, wn_idx *col_ind, wn_idx *row_ptr, double *b);
     double get_aspect_ratio(int NUMEL, int NUMNP, double *XORD, double *YORD, double *ZORD,
                             int nrows, int ncols, int nlayers);
 
